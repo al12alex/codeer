@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EthioSafe - Safety App for Ethiopia</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging.js"></script>
+</head>
+
+<body class="bg-gray-100 font-sans">
+    <!-- Header -->
+    <header class="bg-blue-600 text-white p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold">EthioSafe</h1>
+        <div>
+            <button id="langToggle" class="px-2 py-1 bg-blue-800 rounded">English</button>
+            <button id="logoutBtn" class="px-2 py-1 bg-red-600 rounded hidden">Logout</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-4">
+        <!-- Login Section -->
+        <section id="loginSection" class="bg-white p-6 rounded shadow-md mb-4">
+            <h2 class="text-lg font-semibold mb-4">Login</h2>
+            <input id="phoneInput" type="tel" placeholder="Phone (+2519xxxxxxxx)" class="w-full p-2 mb-2 border rounded">
+            <button id="loginBtn" class="w-full bg-blue-600 text-white p-2 rounded">Send OTP</button>
+            <input id="otpInput" type="text" placeholder="Enter OTP" class="w-full p-2 mb-2 border rounded hidden">
+            <button id="verifyOtpBtn" class="w-full bg-blue-600 text-white p-2 rounded hidden">Verify OTP</button>
+        </section>
+
+        <!-- Main App Section (Hidden until logged in) -->
+        <section id="appSection" class="hidden">
+            <!-- SOS Button -->
+            <div class="text-center mb-4">
+                <button id="sosBtn" class="bg-red-600 text-white px-6 py-3 rounded-full text-lg font-bold">SOS</button>
+            </div>
+
+            <!-- Report Incident -->
+            <div class="bg-white p-6 rounded shadow-md mb-4">
+                <h2 class="text-lg font-semibold mb-4">Report Incident</h2>
+                <input id="incidentDesc" type="text" placeholder="Describe the incident" class="w-full p-2 mb-2 border rounded">
+                <input id="incidentImage" type="file" accept="image/*" class="w-full p-2 mb-2">
+                <button id="reportBtn" class="w-full bg-blue-600 text-white p-2 rounded">Report</button>
+            </div>
+
+            <!-- Incident Feed -->
+            <div class="bg-white p-6 rounded shadow-md">
+                <h2 class="text-lg font-semibold mb-4">Recent Incidents</h2>
+                <ul id="incidentList" class="space-y-4"></ul>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Firebase Configuration (Replace with your Firebase project config)
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            databaseURL: "YOUR_DATABASE_URL",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        // DOM Elements
+        const loginSection = document.getElementById('loginSection');
+        const appSection = document.getElementById('appSection');
+        const phoneInput = document.getElementById('phoneInput');
+        const loginBtn = document.getElementById('loginBtn');
+        const otpInput = document.getElementById('otpInput');
+        const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+        const sosBtn = document.getElementById('sosBtn');
+        const reportBtn = document.getElementById('reportBtn');
+        const incidentDesc = document.getElementById('incidentDesc');
+        const incidentImage = document.getElementById('incidentImage');
+        const incidentList = document.getElementById('incidentList');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const langToggle = document.getElementById('langToggle');
+
+        // Language Toggle
+        let isAmharic = false;
+        const translations = {
+            en: {
+                title: 'EthioSafe',
+                login: 'Login',
+                phonePlaceholder: 'Phone (+2519xxxxxxxx)',
+                sendOtp: 'Send OTP',
+                otpPlaceholder: 'Enter OTP',
+                verifyOtp: 'Verify OTP',
+                sos: 'SOS',
+                reportIncident: 'Report Incident',
+                incidentDescPlaceholder: 'Describe the incident',
+                report: 'Report',
+                recentIncidents: 'Recent Incidents',
+                langToggle: 'Amharic'
+            },
+            am: {
+                title: 'ኢትዮሴፍ',
+                login: 'መግቢያ',
+                phonePlaceholder: 'ስልክ (+2519xxxxxxxx)',
+                sendOtp: 'OTP ላክ',
+                otpPlaceholder: 'OTP አስገባ',
+                verifyOtp: 'OTP አረጋግጥ',
+                sos: 'SOS',
+                reportIncident: 'ክስተት ዘግብ',
+                incidentDescPlaceholder: 'ክስተቱን ግለፅ',
+                report: 'ዘግብ',
+                recentIncidents: 'የቅርብ ጊዜ ክስተቶች',
+                langToggle: 'English'
+            }
+        };
+
+        langToggle.addEventListener('click', () => {
+            isAmharic = !isAmharic;
+            updateLanguage();
+        });
+
+        function updateLanguage() {
+            const lang = isAmharic ? 'am' : 'en';
+            document.querySelector('h1').textContent = translations[lang].title;
+            document.querySelector('#loginSection h2').textContent = translations[lang].login;
+            phoneInput.placeholder = translations[lang].phonePlaceholder;
+            loginBtn.textContent = translations[lang].sendOtp;
+            otpInput.placeholder = translations[lang].otpPlaceholder;
+            verifyOtpBtn.textContent = translations[lang].verifyOtp;
+            sosBtn.textContent = translations[lang].sos;
+            document.querySelector('#appSection h2').textContent = translations[lang].reportIncident;
+            incidentDesc.placeholder = translations[lang].incidentDescPlaceholder;
+            reportBtn.textContent = translations[lang].report;
+            document.querySelector('#appSection .bg-white h2').textContent = translations[lang].recentIncidents;
+            langToggle.textContent = translations[lang].langToggle;
+        }
+
+        // Firebase Phone Authentication
+        auth.languageCode = 'en';
+        window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('loginBtn', {
+            'size': 'invisible'
+        });
+
+        loginBtn.addEventListener('click', () => {
+            const phoneNumber = phoneInput.value;
+            if (!phoneNumber.startsWith('+251')) {
+                alert('Please enter a valid Ethiopian phone number (+2519xxxxxxxx)');
+                return;
+            }
+            auth.signInWithPhoneNumber(phoneNumber, recaptchaVerifier)
+                .then((confirmationResult) => {
+                    window.confirmationResult = confirmationResult;
+                    otpInput.classList.remove('hidden');
+                    verifyOtpBtn.classList.remove('hidden');
+                    loginBtn.classList.add('hidden');
+                })
+                .catch((error) => {
+                    alert('Error sending OTP: ' + error.message);
+                });
+        });
+
+        verifyOtpBtn.addEventListener('click', () => {
+            const code = otpInput.value;
+            confirmationResult.confirm(code)
+                .then((result) => {
+                    loginSection.classList.add('hidden');
+                    appSection.classList.remove('hidden');
+                    logoutBtn.classList.remove('hidden');
+                    loadIncidents();
+                })
+                .catch((error) => {
+                    alert('Error verifying OTP: ' + error.message);
+                });
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            auth.signOut().then(() => {
+                loginSection.classList.remove('hidden');
+                appSection.classList.add('hidden');
+                logoutBtn.classList.add('hidden');
+                phoneInput.value = '';
+                otpInput.value = '';
+                otpInput.classList.add('hidden');
+                verifyOtpBtn.classList.add('hidden');
+                loginBtn.classList.remove('hidden');
+            });
+        });
+
+        // SOS Functionality
+        sosBtn.addEventListener('click', () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const {
+                        latitude,
+                        longitude
+                    } = position.coords;
+                    const user = auth.currentUser;
+                    const message = `Emergency SOS from ${user.phoneNumber}! Location: https://maps.google.com/?q=${latitude},${longitude}`;
+
+                    // Send to Firebase for in-app notifications
+                    db.ref('sos_alerts').push({
+                        userId: user.uid,
+                        phone: user.phoneNumber,
+                        latitude,
+                        longitude,
+                        timestamp: Date.now()
+                    });
+
+                    // Send SMS via Twilio (Server-side function needed)
+                    fetch('https://your-twilio-function-url', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                to: '+251911222333', // Replace with emergency contact
+                                message
+                            })
+                        })
+                        .then(() => alert('SOS sent to emergency contacts!'))
+                        .catch(() => alert('Error sending SMS, but SOS recorded.'));
+                }, () => {
+                    alert('Please enable location services.');
+                });
+            } else {
+                alert('Geolocation not supported.');
+            }
+        });
+
+        // Report Incident
+        reportBtn.addEventListener('click', () => {
+            const description = incidentDesc.value;
+            if (!description) {
+                alert('Please describe the incident.');
+                return;
+            }
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const {
+                        latitude,
+                        longitude
+                    } = position.coords;
+                    const user = auth.currentUser;
+                    const incident = {
+                        userId: user.uid,
+                        phone: user.phoneNumber,
+                        description,
+                        latitude,
+                        longitude,
+                        timestamp: Date.now()
+                    };
+
+                    // Handle image upload (simplified, requires Firebase Storage)
+                    if (incidentImage.files.length > 0) {
+                        alert('Image upload not implemented in this demo.');
+                    }
+
+                    db.ref('incidents').push(incident)
+                        .then(() => {
+                            incidentDesc.value = '';
+                            incidentImage.value = '';
+                            alert('Incident reported successfully!');
+                        })
+                        .catch(() => alert('Error reporting incident.'));
+                }, () => {
+                    alert('Please enable location services.');
+                });
+            } else {
+                alert('Geolocation not supported.');
+            }
+        });
+
+        // Load Incidents
+        function loadIncidents() {
+            db.ref('incidents').on('value', (snapshot) => {
+                incidentList.innerHTML = '';
+                const incidents = snapshot.val();
+                if (incidents) {
+                    Object.values(incidents).reverse().forEach((incident) => {
+                        const li = document.createElement('li');
+                        li.className = 'border-b py-2';
+                        li.innerHTML = `
+              <p>${incident.description}</p>
+              <p class="text-sm text-gray-500">Location: <a href="https://maps.google.com/?q=${incident.latitude},${incident.longitude}" target="_blank">View on Map</a></p>
+              <p class="text-sm text-gray-500">Reported: ${new Date(incident.timestamp).toLocaleString()}</p>
+            `;
+                        incidentList.appendChild(li);
+                    });
+                }
+            });
+        }
+
+        // Check Auth State
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                loginSection.classList.add('hidden');
+                appSection.classList.remove('hidden');
+                logoutBtn.classList.remove('hidden');
+                loadIncidents();
+            } else {
+                loginSection.classList.remove('hidden');
+                appSection.classList.add('hidden');
+                logoutBtn.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+
+</html>
